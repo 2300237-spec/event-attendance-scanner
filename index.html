@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>College of Engineering Attendance Scanner</title>
+
+
+  <!-- QR SCANNER LIBRARY -->
+
+  <script
+    src="https://unpkg.com/html5-qrcode"
+    type="text/javascript">
+  </script>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+
+      margin: 0;
+
+      padding: 20px;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      background: #f4f4f4;
+
+      text-align: center;
+
+    }
+
+
+    .container {
+
+      width: 100%;
+
+      max-width: 600px;
+
+      margin: 0 auto;
+
+      background: white;
+
+      padding: 25px;
+
+      border-radius: 20px;
+
+      box-shadow:
+        0 5px 20px
+        rgba(0, 0, 0, 0.15);
+
+    }
+
+
+    h1 {
+
+      margin-top: 0;
+
+      font-size: 26px;
+
+    }
+
+
+    .subtitle {
+
+      color: #666;
+
+      margin-bottom: 20px;
+
+    }
+
+
+    #reader {
+
+      width: 100%;
+
+      max-width: 500px;
+
+      margin: 20px auto;
+
+    }
+
+
+    #result {
+
+      display: none;
+
+      margin-top: 20px;
+
+      padding: 20px;
+
+      border-radius: 12px;
+
+      font-size: 17px;
+
+      line-height: 1.6;
+
+      font-weight: bold;
+
+    }
+
+
+    .success {
+
+      background: #dff5e1;
+
+      color: #176b2c;
+
+    }
+
+
+    .error {
+
+      background: #ffe1e1;
+
+      color: #9b1c1c;
+
+    }
+
+
+    .duplicate {
+
+      background: #fff1c7;
+
+      color: #805900;
+
+    }
+
+
+    .info {
+
+      background: #e5efff;
+
+      color: #174a8b;
+
+    }
+
+
+    .manual {
+
+      margin-top: 30px;
+
+      padding-top: 25px;
+
+      border-top: 1px solid #ddd;
+
+    }
+
+
+    .manual h3 {
+
+      margin-bottom: 5px;
+
+    }
+
+
+    .manual p {
+
+      color: #666;
+
+      font-size: 14px;
+
+    }
+
+
+    input {
+
+      width: 100%;
+
+      padding: 14px;
+
+      font-size: 17px;
+
+      text-align: center;
+
+      border-radius: 8px;
+
+      border: 1px solid #ccc;
+
+      margin-top: 10px;
+
+      outline: none;
+
+    }
+
+
+    input:focus {
+
+      border-color: #333;
+
+    }
+
+
+    button {
+
+      margin-top: 12px;
+
+      padding: 14px 25px;
+
+      font-size: 16px;
+
+      font-weight: bold;
+
+      border: none;
+
+      border-radius: 8px;
+
+      cursor: pointer;
+
+      background: #222;
+
+      color: white;
+
+    }
+
+
+    button:hover {
+
+      opacity: 0.85;
+
+    }
+
+
+    .scanner-label {
+
+      font-size: 14px;
+
+      color: #777;
+
+      margin-top: 10px;
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+  <h1>
+    📱 Attendance Scanner
+  </h1>
+
+
+  <p class="subtitle">
+    College of Engineering
+  </p>
+
+
+  <div id="reader"></div>
+
+
+  <p class="scanner-label">
+    Point the camera at the participant's QR code.
+  </p>
+
+
+  <!-- RESULT -->
+
+  <div id="result"></div>
+
+
+  <!-- MANUAL ENTRY -->
+
+  <div class="manual">
+
+    <h3>
+      ⌨️ Manual Entry
+    </h3>
+
+
+    <p>
+      If the QR code cannot be scanned,
+      enter the Registration ID manually.
+    </p>
+
+
+    <input
+      type="text"
+      id="manualID"
+      placeholder="Example: ECE-0001"
+      autocomplete="off"
+    >
+
+
+    <button
+      onclick="manualCheckIn()"
+    >
+      CHECK IN
+    </button>
+
+  </div>
+
+
+</div>
+
+
+<script>
+
+
+/*************************************************
+ * APPS SCRIPT BACKEND
+ *************************************************/
+
+
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbwfV4wyIjP5sr6cPztHpHwKwkNcRdsW0ZyVufjlTuLx9ZGIUMjG4kHz3oFhihERUlSC/exec";
+
+
+/*************************************************
+ * VARIABLES
+ *************************************************/
+
+
+let scanner = null;
+
+let processing = false;
+
+
+/*************************************************
+ * SHOW RESULT
+ *************************************************/
+
+
+function showResult(
+  message,
+  type
+) {
+
+  const result =
+    document.getElementById(
+      "result"
+    );
+
+
+  result.style.display =
+    "block";
+
+
+  result.className =
+    "";
+
+
+  result.classList.add(
+    type
+  );
+
+
+  result.innerHTML =
+    message;
+
+}
+
+
+/*************************************************
+ * HIDE RESULT
+ *************************************************/
+
+
+function hideResult() {
+
+  const result =
+    document.getElementById(
+      "result"
+    );
+
+
+  result.style.display =
+    "none";
+
+}
+
+
+/*************************************************
+ * START QR SCANNER
+ *************************************************/
+
+
+function startScanner() {
+
+
+  /*
+   * Prevent multiple scanners
+   */
+
+  if (scanner !== null) {
+
+    return;
+
+  }
+
+
+  hideResult();
+
+
+  /*
+   * Create scanner
+   */
+
+  scanner =
+    new Html5Qrcode(
+      "reader"
+    );
+
+
+  /*
+   * Get available cameras
+   */
+
+  Html5Qrcode
+    .getCameras()
+
+    .then(
+      function(cameras) {
+
+
+        /*
+         * No camera
+         */
+
+        if (
+          !cameras ||
+          cameras.length === 0
+        ) {
+
+          showResult(
+
+            "❌ No camera was detected.<br><br>" +
+
+            "Please make sure your device has a camera.",
+
+            "error"
+
+          );
+
+          scanner = null;
+
+          return;
+
+        }
+
+
+        /*
+         * Default camera
+         */
+
+        let selectedCamera =
+          cameras[0].id;
+
+
+        /*
+         * Try to find rear camera
+         */
+
+        for (
+          let i = 0;
+          i < cameras.length;
+          i++
+        ) {
+
+
+          const label =
+            String(
+              cameras[i].label || ""
+            )
+            .toLowerCase();
+
+
+          if (
+
+            label.includes("back") ||
+
+            label.includes("rear") ||
+
+            label.includes("environment")
+
+          ) {
+
+            selectedCamera =
+              cameras[i].id;
+
+            break;
+
+          }
+
+        }
+
+
+        /*
+         * Start scanner
+         */
+
+        scanner.start(
+
+          selectedCamera,
+
+          {
+
+            fps: 10,
+
+            qrbox: {
+
+              width: 250,
+
+              height: 250
+
+            }
+
+          },
+
+          onScanSuccess,
+
+          function(errorMessage) {
+
+            /*
+             * Normal QR scanning errors
+             * are ignored.
+             */
+
+          }
+
+        )
+
+        .catch(
+          function(error) {
+
+
+            console.error(
+              "Camera start error:",
+              error
+            );
+
+
+            showResult(
+
+              "❌ Camera could not start.<br><br>" +
+
+              "Please make sure camera access is allowed " +
+
+              "for this website, then refresh the page.",
+
+              "error"
+
+            );
+
+
+            scanner = null;
+
+          }
+
+        );
+
+      }
+
+    )
+
+    .catch(
+      function(error) {
+
+
+        console.error(
+          "Camera permission error:",
+          error
+        );
+
+
+        showResult(
+
+          "❌ Camera access was denied.<br><br>" +
+
+          "Please allow camera access in your browser " +
+
+          "and refresh the page.",
+
+          "error"
+
+        );
+
+
+        scanner = null;
+
+      }
+
+    );
+
+}
+
+
+/*************************************************
+ * QR SCAN SUCCESS
+ *************************************************/
+
+
+function onScanSuccess(
+  decodedText
+) {
+
+
+  /*
+   * Prevent multiple scans
+   */
+
+  if (processing) {
+
+    return;
+
+  }
+
+
+  processing = true;
+
+
+  /*
+   * Stop scanner before processing
+   */
+
+  if (scanner) {
+
+
+    scanner.stop()
+
+      .then(
+        function() {
+
+
+          try {
+
+            scanner.clear();
+
+          }
+
+          catch (error) {
+
+            console.log(
+              "Scanner clear:",
+              error
+            );
+
+          }
+
+
+          scanner = null;
+
+
+          checkAttendance(
+            decodedText
+          );
+
+        }
+
+      )
+
+      .catch(
+        function(error) {
+
+
+          console.log(
+            "Scanner stop:",
+            error
+          );
+
+
+          scanner = null;
+
+
+          checkAttendance(
+            decodedText
+          );
+
+        }
+
+      );
+
+
+  }
+
+  else {
+
+    checkAttendance(
+      decodedText
+    );
+
+  }
+
+}
+
+
+/*************************************************
+ * SEND ATTENDANCE REQUEST
+ *************************************************/
+
+
+function checkAttendance(
+  registrationID
+) {
+
+
+  /*
+   * Clean the ID
+   */
+
+  registrationID =
+    String(
+      registrationID || ""
+    )
+    .trim()
+    .toUpperCase();
+
+
+  /*
+   * Empty ID
+   */
+
+  if (!registrationID) {
+
+
+    showResult(
+
+      "❌ Registration ID is empty.",
+
+      "error"
+
+    );
+
+
+    restartScanner();
+
+    return;
+
+  }
+
+
+  /*
+   * Show checking status
+   */
+
+  showResult(
+
+    "⏳ Checking registration...<br><br>" +
+
+    registrationID,
+
+    "info"
+
+  );
+
+
+  /*
+   * Create unique callback name
+   */
+
+  const callbackName =
+
+    "attendanceCallback_" +
+
+    Date.now();
+
+
+  /*
+   * Create callback function
+   */
+
+  window[callbackName] =
+
+    function(response) {
+
+
+      /*
+       * Remove callback
+
+       */
+
+      delete window[
+        callbackName
+      ];
+
+
+      /*
+       * Remove request script
+
+       */
+
+      const oldScript =
+        document.getElementById(
+          callbackName
+        );
+
+
+      if (oldScript) {
+
+        oldScript.remove();
+
+      }
+
+
+      /*
+       * Process response
+
+       */
+
+      handleResponse(
+        response
+      );
+
+    };
+
+
+  /*
+   * Create script request
+   */
+
+  const script =
+    document.createElement(
+      "script"
+    );
+
+
+  script.id =
+    callbackName;
+
+
+  /*
+   * Build Apps Script URL
+   */
+
+  script.src =
+
+    APPS_SCRIPT_URL +
+
+    "?action=record" +
+
+    "&id=" +
+
+    encodeURIComponent(
+      registrationID
+    ) +
+
+    "&callback=" +
+
+    callbackName;
+
+
+  /*
+   * Connection error
+   */
+
+  script.onerror =
+    function() {
+
+
+      delete window[
+        callbackName
+      ];
+
+
+      script.remove();
+
+
+      showResult(
+
+        "❌ Could not connect to the attendance system.<br><br>" +
+
+        "Please check your internet connection.",
+
+        "error"
+
+      );
+
+
+      restartScanner();
+
+    };
+
+
+  /*
+   * Send request
+   */
+
+  document.body.appendChild(
+    script
+  );
+
+}
+
+
+/*************************************************
+ * HANDLE SERVER RESPONSE
+ *************************************************/
+
+
+function handleResponse(
+  response
+) {
+
+
+  /*
+   * Successful attendance
+   */
+
+  if (
+    response &&
+    response.success === true
+  ) {
+
+
+    showResult(
+
+      "✅ ATTENDANCE RECORDED!<br><br>" +
+
+      "<strong>" +
+      escapeHTML(
+        response.name
+      ) +
+      "</strong><br><br>" +
+
+      "Student No.: " +
+      escapeHTML(
+        response.studentNumber
+      ) +
+
+      "<br>" +
+
+      "Program: " +
+      escapeHTML(
+        response.program
+      ) +
+
+      "<br>" +
+
+      "Year Level: " +
+      escapeHTML(
+        response.yearLevel
+      ) +
+
+      "<br>" +
+
+      "Registration ID: " +
+      escapeHTML(
+        response.registrationID
+      ) +
+
+      "<br><br>" +
+
+      "Time In: " +
+      escapeHTML(
+        response.time
+      ),
+
+      "success"
+
+    );
+
+  }
+
+
+  /*
+   * Duplicate attendance
+   */
+
+  else if (
+
+    response &&
+
+    response.type ===
+    "duplicate"
+
+  ) {
+
+
+    showResult(
+
+      "⚠️ ALREADY RECORDED!<br><br>" +
+
+      "<strong>" +
+
+      escapeHTML(
+        response.name
+      ) +
+
+      "</strong><br><br>" +
+
+      "This participant has already been checked in.",
+
+      "duplicate"
+
+    );
+
+  }
+
+
+  /*
+   * Registration not found
+   */
+
+  else {
+
+
+    showResult(
+
+      "❌ " +
+
+      escapeHTML(
+
+        response &&
+        response.message
+
+          ? response.message
+
+          : "Registration ID not found."
+
+      ),
+
+      "error"
+
+    );
+
+  }
+
+
+  /*
+   * Restart after result
+   */
+
+  restartScanner();
+
+}
+
+
+/*************************************************
+ * RESTART SCANNER
+ *************************************************/
+
+
+function restartScanner() {
+
+
+  setTimeout(
+
+    function() {
+
+
+      processing =
+        false;
+
+
+      startScanner();
+
+
+    },
+
+    3000
+
+  );
+
+}
+
+
+/*************************************************
+ * MANUAL CHECK-IN
+ *************************************************/
+
+
+function manualCheckIn() {
+
+
+  /*
+   * Prevent duplicate requests
+   */
+
+  if (processing) {
+
+    return;
+
+  }
+
+
+  /*
+   * Get input
+
+   */
+
+  const input =
+    document.getElementById(
+      "manualID"
+    );
+
+
+  const registrationID =
+    input.value
+      .trim();
+
+
+  /*
+   * Empty input
+
+   */
+
+  if (!registrationID) {
+
+
+    showResult(
+
+      "⚠️ Please enter a Registration ID.<br><br>" +
+
+      "Example: ECE-0001",
+
+      "error"
+
+    );
+
+
+    return;
+
+  }
+
+
+  /*
+   * Clear input
+
+   */
+
+  input.value =
+    "";
+
+
+  /*
+   * Set processing
+
+   */
+
+  processing =
+    true;
+
+
+  /*
+   * Stop camera if running
+   */
+
+  if (scanner) {
+
+
+    scanner.stop()
+
+      .catch(
+        function() {}
+      )
+
+      .finally(
+        function() {
+
+
+          scanner = null;
+
+
+          checkAttendance(
+            registrationID
+          );
+
+
+        }
+      );
+
+
+  }
+
+  else {
+
+
+    checkAttendance(
+      registrationID
+    );
+
+  }
+
+}
+
+
+/*************************************************
+ * ESCAPE HTML
+ *************************************************/
+
+
+function escapeHTML(
+  value
+) {
+
+
+  return String(
+    value ?? ""
+  )
+
+  .replace(
+    /&/g,
+    "&amp;"
+  )
+
+  .replace(
+    /</g,
+    "&lt;"
+  )
+
+  .replace(
+    />/g,
+    "&gt;"
+  )
+
+  .replace(
+    /"/g,
+    "&quot;"
+  )
+
+  .replace(
+    /'/g,
+    "&#039;"
+  );
+
+}
+
+
+/*************************************************
+ * START SCANNER WHEN PAGE LOADS
+ *************************************************/
+
+
+window.addEventListener(
+
+  "load",
+
+  function() {
+
+    startScanner();
+
+  }
+
+);
+
+</script>
+
+
+</body>
+
+</html>
